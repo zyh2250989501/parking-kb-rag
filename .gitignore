@@ -1,0 +1,13 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+data/
+.superpowers/
+corpus/*
+!corpus/sources.yaml
+!corpus/sources.md
+!corpus/metadata_overrides.yaml
+!corpus/jieba_userdict.txt
