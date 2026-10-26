@@ -49,10 +49,17 @@ def cand(chunk_id="c1", status="现行", text="测试内容", score=1.0, **overr
     doc_id = overrides.pop("doc_id", "d1")
     title = overrides.pop("title", "测试文档")
     effective_date = overrides.pop("effective_date", None)
+    doc_no = overrides.pop("doc_no", None)
+    version = overrides.pop("version", None)
     page = overrides.pop("page", 1)
     section_path = overrides.pop("section_path", "第一章 总则")
     meta_obj = overrides.pop("meta", None) or meta(
-        doc_id=doc_id, title=title, status=status, effective_date=effective_date
+        doc_id=doc_id,
+        title=title,
+        status=status,
+        effective_date=effective_date,
+        doc_no=doc_no,
+        version=version,
     )
     c = chunk(
         chunk_id=chunk_id,
