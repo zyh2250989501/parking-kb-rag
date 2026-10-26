@@ -35,4 +35,5 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src", "."]
 testpaths = ["tests"]
+addopts = "-m 'not slow'"
 markers = ["slow: tests that load real models or OCR engines"]
