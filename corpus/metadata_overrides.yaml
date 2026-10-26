@@ -1,0 +1,59 @@
+# 人工元数据覆盖 —— 以文件 SHA-256 为 key，字段级覆盖自动抽取结果。
+# 关键收费办法必须在此显式标注状态与生效日期，不能依赖正则猜测。
+overrides:
+  # 长沙市地方标准（征求意见稿，编号与日期仍是 XXXX 占位）
+  8ca57bfd8ddc9e47ba11325948cf0e1d61e26b417f1b552debcfa434b443736d:
+    title: "重点区域公共停车场管理规范（征求意见稿）"
+    doc_type: "标准"
+    doc_no: "DB 4301/T XXXX—XXXX"
+    status: "未知"
+
+  # 大华停车场管理系统英文用户手册
+  0be5a253fee3ad1e9a74286b2e85870f77735f99291cf29d105572de7c83b9c7:
+    title: "大华停车场管理系统用户手册 V2.0.0"
+    doc_type: "设备手册"
+    status: "未知"
+
+  # 珠海市地方标准（下载到的是标准信息页）
+  d9ca9972a930518753a768b940f840550306586611d358466c81a9e3497ac110:
+    title: "停车场运营管理规范（DB4404/T 66—2024）"
+    doc_type: "标准"
+    doc_no: "DB4404/T 66—2024"
+    status: "现行"
+
+  # 广东省智慧停车建设指南（草案，发布日期为 202X 占位）
+  4955f62128090566b480ca6545718b3dd08ae244884617b4c4918da052fcf488:
+    title: "广东省智慧停车建设指南（草案）"
+    doc_type: "标准"
+    status: "未知"
+
+  # 湖北省机动车停放服务收费管理办法（2016）
+  72b3cbee6a4a2f28eedb9b6857f365179bab2014fefaaa1a2c6fd2097c1b6322:
+    title: "湖北省机动车停放服务收费管理办法（2016）"
+    doc_type: "收费办法"
+    doc_no: "鄂价工服〔2016〕151 号"
+    effective_date: "2017-02-01"
+    status: "现行"
+
+  # 湖南省机动车停放服务收费管理办法（2025）
+  8c486a14cdc254df23846b588205dc65f6972db7fe80e260047fbc2608e1eeef:
+    title: "湖南省机动车停放服务收费管理办法（2025）"
+    doc_type: "收费办法"
+    doc_no: "湘发改价费规〔2025〕723 号"
+    effective_date: "2026-01-01"
+    status: "现行"
+
+  ac225f49b471da40abf432c2aafe9989033b1dad4017c38eff7531896975cb16:
+    title: "道路内智能泊车客服中心服务规范"
+    doc_type: "客服话术"
+    status: "现行"
+
+  # 团体标准
+  a39fd13d20c1fe953230e60cb840cefc9ae02f9394338524ed0b191bf13ecb9a:
+    title: "公共停车场（库）运营服务规范"
+    doc_type: "标准"
+    status: "现行"
+  b46db76439738aae2c3546f11c2ae52500c1df830a248dca2a543bb0f89ee6b6:
+    title: "停车场运营管理服务规范"
+    doc_type: "标准"
+    status: "现行"
