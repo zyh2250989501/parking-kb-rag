@@ -3,10 +3,17 @@ from pathlib import Path
 import pymupdf as fitz
 
 
-def make_text_pdf(path: Path, text: str = "停车收费标准测试正文。") -> Path:
+def make_text_pdf(
+    path: Path,
+    text: str = (
+        "停车收费标准按照车型和停放时长计算，小型车每小时收费两元。\n"
+        "大型车每小时收费五元，夜间停放按次收费，不足一小时按一小时计。"
+    ),
+) -> Path:
     doc = fitz.open()
     page = doc.new_page()
-    page.insert_text((72, 72), text, fontname="china-s", fontsize=12)
+    for i, line in enumerate(text.split("\n")):
+        page.insert_text((72, 72 + i * 18), line, fontname="china-s", fontsize=12)
     doc.save(path)
     doc.close()
     return path
