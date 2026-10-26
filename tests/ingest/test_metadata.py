@@ -51,6 +51,13 @@ def test_status_ignores_technical_failure_mentions():
     assert extract_metadata(doc, file_info(), {}).status == "未知"
 
 
+def test_status_ignores_scope_recommendation():
+    doc = parsed_doc_with_text(
+        "本文件适用于重点区域公共停车场的管理，其他区域公共停车场可参照实施。"
+    )
+    assert extract_metadata(doc, file_info(), {}).status == "未知"
+
+
 def test_status_ignores_repeal_of_other_documents():
     doc = parsed_doc_with_text(
         "本办法自2017年2月1日起施行。《旧办法》（鄂价工服规〔2013〕83号）同时废止。"
