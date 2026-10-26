@@ -29,18 +29,19 @@ def make_mixed_pdf(path: Path) -> Path:
     page.insert_text((72, 110), "停车收费按小时计算。", fontname="china-s", fontsize=10)
     x0, y0 = 72, 150
     rows = [["车型", "费率"], ["小型车", "2元/小时"]]
+    cell_w, cell_h = 100, 30
     for r, row in enumerate(rows):
         for c, value in enumerate(row):
-            page.insert_text(
-                (x0 + 4 + c * 100, y0 + 20 + r * 30),
-                value,
-                fontname="china-s",
-                fontsize=10,
+            cell = fitz.Rect(
+                x0 + c * cell_w,
+                y0 + r * cell_h,
+                x0 + (c + 1) * cell_w,
+                y0 + (r + 1) * cell_h,
             )
-    for i in range(3):
-        page.draw_line((x0, y0 + i * 30), (x0 + 200, y0 + i * 30))
-    for i in range(3):
-        page.draw_line((x0 + i * 100, y0), (x0 + i * 100, y0 + 60))
+            page.draw_rect(cell, color=(0, 0, 0), width=1)
+            page.insert_textbox(
+                cell + (4, 4, -4, -4), value, fontname="china-s", fontsize=10
+            )
     doc.save(path)
     doc.close()
     return path
@@ -64,8 +65,10 @@ def make_xlsx_with_merged_header(path: Path) -> Path:
     ws.title = "价目"
     ws.merge_cells("A1:B1")
     ws["A1"] = "车型"
+    ws.merge_cells("A2:A3")
     ws["A2"] = "小型车"
     ws["B2"] = "2元/小时"
+    ws["B3"] = "3元/小时"
     wb.save(path)
     return path
 
