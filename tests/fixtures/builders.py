@@ -19,11 +19,12 @@ def make_text_pdf(
     return path
 
 
-def make_image_only_pdf(path: Path) -> Path:
-    """A page with no text layer, used to exercise the scanned-PDF path."""
+def make_image_only_pdf(path: Path, pages: int = 1) -> Path:
+    """Pages with no text layer, used to exercise the scanned-PDF path."""
     doc = fitz.open()
-    page = doc.new_page()
-    page.draw_rect(page.rect, color=(0, 0, 0), fill=(0.5, 0.5, 0.5))
+    for _ in range(pages):
+        page = doc.new_page()
+        page.draw_rect(page.rect, color=(0, 0, 0), fill=(0.5, 0.5, 0.5))
     doc.save(path)
     doc.close()
     return path

@@ -7,7 +7,12 @@ from parking_kb.ingest.clean import clean_document
 from parking_kb.ingest.metadata import extract_metadata, load_overrides
 from parking_kb.ingest.parse.ocr import OcrEngine
 from parking_kb.ingest.parse.registry import parse_document
-from parking_kb.ingest.report import IngestFailure, IngestReport, write_report
+from parking_kb.ingest.report import (
+    IngestFailure,
+    IngestReport,
+    IngestWarning,
+    write_report,
+)
 from parking_kb.ingest.scan import scan_corpus
 from parking_kb.types import Chunk, DocumentMeta
 
@@ -36,6 +41,7 @@ def run_ingest(
     documents: dict[str, DocumentMeta] = {}
     chunks: list[Chunk] = []
     failures: list[IngestFailure] = []
+    warnings: list[IngestWarning] = []
     succeeded = 0
 
     for info in infos:
@@ -45,9 +51,21 @@ def run_ingest(
         doc_id = info.sha256[:12] or info.path.stem
         try:
             doc = clean_document(parse_document(info.path, doc_id, ocr_engine))
+            warnings.extend(
+                IngestWarning(str(info.path), message) for message in doc.warnings
+            )
             meta = extract_metadata(doc, info, overrides)
+            doc_chunks = chunk_document(doc, meta)
+            if not doc_chunks:
+                detail = "；".join(doc.warnings) or "文档为空"
+                failures.append(
+                    IngestFailure(
+                        str(info.path), f"解析后没有可入库内容：{detail}"
+                    )
+                )
+                continue
             documents[meta.doc_id] = meta
-            chunks.extend(chunk_document(doc, meta))
+            chunks.extend(doc_chunks)
             succeeded += 1
         except Exception as exc:  # noqa: BLE001 - isolate per-file failures
             failures.append(
@@ -72,6 +90,7 @@ def run_ingest(
         scanned_docs=sum(1 for info in infos if info.is_scanned),
         avg_chunk_len=avg_len,
         missing_metadata=missing,
+        warnings=warnings,
     )
     write_report(report, data_dir / "ingest_report.md")
     return report

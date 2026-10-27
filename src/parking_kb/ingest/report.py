@@ -9,6 +9,12 @@ class IngestFailure:
 
 
 @dataclass
+class IngestWarning:
+    path: str
+    message: str
+
+
+@dataclass
 class IngestReport:
     total: int
     succeeded: int
@@ -19,6 +25,7 @@ class IngestReport:
     scanned_docs: int = 0
     avg_chunk_len: float = 0.0
     missing_metadata: dict[str, int] = field(default_factory=dict)
+    warnings: list[IngestWarning] = field(default_factory=list)
 
 
 def write_report(report: IngestReport, path: Path) -> None:
@@ -53,6 +60,12 @@ def write_report(report: IngestReport, path: Path) -> None:
     lines.extend(["", "## 失败清单", "", "| 文件 | 失败原因 |", "| --- | --- |"])
     if report.failures:
         lines.extend(f"| {item.path} | {item.error} |" for item in report.failures)
+    else:
+        lines.append("| 无 | - |")
+
+    lines.extend(["", "## 警告", "", "| 文件 | 警告 |", "| --- | --- |"])
+    if report.warnings:
+        lines.extend(f"| {item.path} | {item.message} |" for item in report.warnings)
     else:
         lines.append("| 无 | - |")
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
