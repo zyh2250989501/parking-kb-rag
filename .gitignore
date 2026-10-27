@@ -12,3 +12,4 @@ corpus/*
 !corpus/sources.md
 !corpus/metadata_overrides.yaml
 !corpus/jieba_userdict.txt
+reports/*.log
