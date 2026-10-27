@@ -7,7 +7,7 @@ from parking_kb.eval.build_set import (
     write_eval_set,
 )
 from parking_kb.eval.schema import EvalQuestion, GoldSpan
-from tests.factories import chunk
+from tests.factories import chunk, meta
 
 
 class FakeJsonLLM:
@@ -120,6 +120,48 @@ def test_cross_doc_questions_record_both_source_docs():
     qs = build_eval_set(chunks, llm, {"cross_doc": 1})
     assert len(qs) == 1
     assert set(qs[0].source_docs) == {"d1", "d2"}
+
+
+def test_version_questions_require_a_same_doc_no_pair():
+    llm = FakeJsonLLM({"questions": []})
+    chunks = [
+        chunk("c1", "d1", "按小时收费。"),
+        chunk("c2", "d2", "道闸设备维护。"),
+    ]
+    assert build_eval_set(chunks, llm, {"version": 1}) == []
+    assert llm.calls == []
+
+
+def test_version_questions_use_same_doc_no_pair():
+    old = chunk(
+        "c1",
+        "d1",
+        "旧版收费为每小时两元。",
+        meta=meta(doc_id="d1", doc_no="DB1", status="失效"),
+    )
+    new = chunk(
+        "c2",
+        "d2",
+        "新版收费为每小时三元。",
+        meta=meta(doc_id="d2", doc_no="DB1", status="现行"),
+    )
+    llm = FakeJsonLLM(
+        {
+            "questions": [
+                {
+                    "question": "现行标准每小时收多少",
+                    "answer": "三元",
+                    "quote": "新版收费为每小时三元",
+                    "type": "version",
+                    "difficulty": "hard",
+                }
+            ]
+        }
+    )
+    questions = build_eval_set([old, new], llm, {"version": 1})
+    assert len(questions) == 1
+    assert questions[0].question_type == "version"
+    assert questions[0].gold_span.doc_id == "d2"
 
 
 def test_malformed_llm_output_returns_no_questions():

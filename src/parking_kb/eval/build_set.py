@@ -27,7 +27,10 @@ _INSTRUCTIONS = {
     "cross_doc": "生成 {count} 个需要综合两份资料对比的问题。",
     "version": "生成 {count} 个新旧版本或效力对比题，答案需说明适用版本与生效日期。",
     "unanswerable": (
-        "生成 {count} 个资料中没有答案、但与停车业务相关的问题；"
+        "生成 {count} 个与停车业务相关、但所给资料无法回答的问题。"
+        "优先询问资料未收录的其他城市或省份的管理规定、其他厂商的设备参数、"
+        "企业内部制度这类资料完全不可能覆盖的内容；"
+        "不要询问所给资料中已有条款、数值或概念的细节。"
         "answer 写“语料未提及”，quote 可省略。"
     ),
 }
@@ -52,18 +55,14 @@ def _select_context(
         return [by_doc[doc_id] for doc_id in docs] if len(docs) >= 2 else []
 
     if question_type == "version":
+        # A version question needs two documents sharing a doc_no. Pairing
+        # unrelated documents of the same doc_type produces fact questions
+        # that look like version questions and would corrupt that bucket.
         by_doc_no: dict[str, dict[str, Chunk]] = defaultdict(dict)
         for item in chunks:
             if item.meta.doc_no:
                 by_doc_no[item.meta.doc_no].setdefault(item.doc_id, item)
         for group in by_doc_no.values():
-            if len(group) >= 2:
-                return list(group.values())[:2]
-
-        by_type: dict[str, dict[str, Chunk]] = defaultdict(dict)
-        for item in chunks:
-            by_type[item.meta.doc_type].setdefault(item.doc_id, item)
-        for group in by_type.values():
             if len(group) >= 2:
                 return list(group.values())[:2]
         return []
