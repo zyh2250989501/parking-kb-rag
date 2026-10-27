@@ -64,6 +64,7 @@
 ## 5. Judge
 
 - 模型：SiliconFlow 上的 Qwen 系列（`JUDGE_MODEL`），与生成模型 DeepSeek 异源。
+- **首轮实测（2026-10-27）没有满足这一条**：硅基流动余额为 0，judge 临时指向 DeepSeek，裁判与生成同源。缓存键包含模型名，换回 Qwen 重跑不会复用同源判定。这轮生成类指标按「偏乐观上界」解读。
 - 输出严格 JSON：`correct`（correct / partial / wrong）、`faithful`、`citation_precise`、`reason`。
 - 解析失败或档位不在枚举内一律按 `wrong` 记录并写明原因，不做猜测映射——宁可少算，不要不可审计。
 - 偏差控制：保留全部判定理由；在人工校对子集上另算 judge 与人工的一致率。该一致率数字待真实评估后补入报告。
