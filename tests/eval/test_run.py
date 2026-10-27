@@ -4,7 +4,7 @@ from parking_kb.eval.report import (
     render_eval_report,
     write_judge_verdicts,
 )
-from parking_kb.eval.run import CONFIGS, aggregate, run_eval
+from parking_kb.eval.run import CONFIGS, aggregate, aggregate_by_config, run_eval
 from parking_kb.eval.schema import EvalQuestion, GoldSpan
 from parking_kb.types import AnswerResult, Candidate, Citation
 from tests.factories import chunk
@@ -221,3 +221,49 @@ def test_judge_verdicts_roundtrip(tmp_path):
     path = tmp_path / "verdicts.jsonl"
     write_judge_verdicts(verdicts, path)
     assert load_judge_verdicts(path) == verdicts
+
+
+def test_verdict_records_rebuild_the_same_aggregate():
+    result = run_eval(
+        [question()],
+        "dense_only",
+        fake_retriever(),
+        fake_generator(),
+        fake_judge(),
+        [gold_chunk()],
+    )
+    rebuilt = aggregate_by_config(result["verdicts"])
+    assert rebuilt["dense_only"]["recall@5"] == result["recall@5"]
+    assert rebuilt["dense_only"]["by_type"]["fact"]["count"] == 1
+    assert rebuilt["dense_only"]["groups"]["all"]["count"] == 1
+
+
+def test_offline_report_from_written_verdicts(tmp_path):
+    result = run_eval(
+        [question()],
+        "full",
+        fake_retriever(),
+        fake_generator(),
+        fake_judge(),
+        [gold_chunk()],
+    )
+    path = tmp_path / "verdicts.jsonl"
+    write_judge_verdicts(result["verdicts"], path)
+    loaded = load_judge_verdicts(path)
+    text = render_eval_report(aggregate_by_config(loaded), loaded)
+    assert "Recall@5" in text and "full" in text
+
+
+def test_failure_section_reads_nested_verdict():
+    verdicts = [
+        {
+            "config": "full",
+            "qid": "q1",
+            "question": "怎么收费",
+            "answer": "资料中未提及",
+            "error_type": "召回缺失",
+            "verdict": {"correct": "wrong", "reason": "上下文未覆盖"},
+        }
+    ]
+    text = render_eval_report({"full": {}}, verdicts)
+    assert "wrong" in text and "上下文未覆盖" in text

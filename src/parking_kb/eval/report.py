@@ -117,13 +117,15 @@ def _failure_section(verdicts: list[dict]) -> list[str]:
         lines.append(f"### {error_type}（{len(items)} 题，展示前 3 条）")
         lines.append("")
         for item in items[:3]:
+            verdict = item.get("verdict") or {}
             lines.append(
                 f"- **{item.get('config', '-')} / {item.get('qid', '-')}** "
                 f"问题：{item.get('question', '')}"
             )
             lines.append(f"  - 答案：{item.get('answer', '')}")
             lines.append(
-                f"  - 判定：{item.get('correct', '-')} — {item.get('reason', '')}"
+                f"  - 判定：{verdict.get('correct', item.get('correct', '-'))} "
+                f"— {verdict.get('reason', item.get('reason', ''))}"
             )
         lines.append("")
     return lines

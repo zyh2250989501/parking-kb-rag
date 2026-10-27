@@ -136,6 +136,19 @@ def aggregate(results: list[dict]) -> dict:
     }
 
 
+def aggregate_by_config(records: list[dict]) -> dict[str, dict]:
+    """Rebuild the per-config aggregates from saved run records."""
+    grouped: dict[str, list[dict]] = {}
+    for record in records:
+        grouped.setdefault(record["config"], []).append(record)
+    aggregated: dict[str, dict] = {}
+    for config_name, config_records in grouped.items():
+        metrics = aggregate(config_records)
+        metrics["config"] = config_name
+        aggregated[config_name] = metrics
+    return aggregated
+
+
 def run_eval(
     questions: list[EvalQuestion],
     config_name: str,
@@ -199,16 +212,7 @@ def run_eval(
             ),
         }
         records.append(record)
-        verdict_records.append(
-            {
-                "qid": question.qid,
-                "config": config_name,
-                **asdict(verdict),
-                "error_type": error_type,
-                "question": question.question,
-                "answer": answer.answer,
-            }
-        )
+        verdict_records.append({"config": config_name, **record})
 
     result = aggregate(records)
     result["config"] = config_name

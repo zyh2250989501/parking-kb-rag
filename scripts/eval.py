@@ -5,8 +5,12 @@ from pathlib import Path
 from parking_kb.config import load_settings
 from parking_kb.eval.build_set import load_eval_set
 from parking_kb.eval.judge import LLMJudge
-from parking_kb.eval.report import render_eval_report, write_judge_verdicts
-from parking_kb.eval.run import CONFIGS, run_eval
+from parking_kb.eval.report import (
+    load_judge_verdicts,
+    render_eval_report,
+    write_judge_verdicts,
+)
+from parking_kb.eval.run import CONFIGS, aggregate_by_config, run_eval
 from parking_kb.generate.client import CachedProvider, OpenAICompatibleProvider
 from parking_kb.generate.schema import AnswerGenerator
 from parking_kb.index.dense import COLLECTION, BgeM3Embedder, DenseIndex
@@ -57,7 +61,24 @@ def main() -> None:
     parser.add_argument("--env", type=Path, default=Path(".env"))
     parser.add_argument("--device", default=None)
     parser.add_argument("--rebuild-index", action="store_true")
+    parser.add_argument(
+        "--report-only",
+        action="store_true",
+        help="rebuild the report from saved verdicts, offline and without API keys",
+    )
     args = parser.parse_args()
+
+    if args.report_only:
+        records = load_judge_verdicts(args.verdicts)
+        if not records:
+            raise SystemExit(f"no saved records at {args.verdicts}")
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            render_eval_report(aggregate_by_config(records), records),
+            encoding="utf-8",
+        )
+        print(f"wrote {args.out} from {len(records)} saved records")
+        return
 
     env_file = args.env if args.env.exists() else None
     settings = load_settings(env_file)
