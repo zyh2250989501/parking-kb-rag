@@ -1,4 +1,5 @@
 import json
+import threading
 from dataclasses import asdict
 
 from parking_kb.index.store import ChunkStore, load_chunks_jsonl
@@ -37,6 +38,28 @@ def test_get_chunks_preserves_requested_order(tmp_path):
     store.upsert_documents([meta(doc_id="d1")])
     store.upsert_chunks([chunk("c1", "d1", "一"), chunk("c2", "d1", "二")])
     assert [c.chunk_id for c in store.get_chunks(["c2", "c1"])] == ["c2", "c1"]
+    store.close()
+
+
+def test_store_is_usable_from_another_thread(tmp_path):
+    """FastAPI 在线程池里执行同步端点，连接必须能跨线程使用。"""
+    store = ChunkStore(tmp_path / "kb.sqlite")
+    store.upsert_documents([meta(doc_id="d1")])
+    store.upsert_chunks([chunk("c1", "d1", "收费按小时计")])
+    result = {}
+
+    def work():
+        try:
+            result["rows"] = store.get_chunks(["c1"])
+            result["docs"] = store.list_documents()
+        except Exception as exc:  # noqa: BLE001
+            result["error"] = exc
+
+    thread = threading.Thread(target=work)
+    thread.start()
+    thread.join()
+    assert "error" not in result, result.get("error")
+    assert result["rows"][0].text == "收费按小时计"
     store.close()
 
 

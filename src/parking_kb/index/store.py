@@ -1,5 +1,6 @@
 import json
 import sqlite3
+import threading
 from pathlib import Path
 
 from parking_kb.types import Chunk, DocumentMeta
@@ -57,13 +58,16 @@ def _row_to_meta(row: sqlite3.Row) -> DocumentMeta:
 class ChunkStore:
     def __init__(self, db_path: Path):
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
+        # 服务端在线程池里执行同步端点，单连接跨线程使用必须关掉同线程检查，
+        # 并由 _lock 串行化访问。
+        self.conn = sqlite3.connect(db_path, check_same_thread=False)
+        self._lock = threading.RLock()
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA foreign_keys = ON")
         self.conn.executescript(_SCHEMA)
 
     def upsert_documents(self, docs: list[DocumentMeta]) -> None:
-        with self.conn:
+        with self._lock, self.conn:
             for meta in docs:
                 self.conn.execute(
                     """
@@ -106,7 +110,7 @@ class ChunkStore:
                     )
 
     def upsert_chunks(self, chunks: list[Chunk]) -> None:
-        with self.conn:
+        with self._lock, self.conn:
             for chunk in chunks:
                 self.conn.execute(
                     """
@@ -131,27 +135,29 @@ class ChunkStore:
                 )
 
     def get_document(self, doc_id: str) -> DocumentMeta | None:
-        row = self.conn.execute(
-            "SELECT * FROM documents WHERE doc_id = ?", (doc_id,)
-        ).fetchone()
+        with self._lock:
+            row = self.conn.execute(
+                "SELECT * FROM documents WHERE doc_id = ?", (doc_id,)
+            ).fetchone()
         return _row_to_meta(row) if row else None
 
     def get_chunks(self, chunk_ids: list[str]) -> list[Chunk]:
         if not chunk_ids:
             return []
         placeholders = ",".join("?" for _ in chunk_ids)
-        rows = self.conn.execute(
-            f"""
-            SELECT c.chunk_id, c.doc_id, c.text, c.section_path,
-                   c.page_start, c.page_end,
-                   d.title, d.doc_type, d.status, d.doc_no, d.issuer,
-                   d.effective_date, d.version, d.source_url, d.page_count
-            FROM chunks c
-            JOIN documents d ON d.doc_id = c.doc_id
-            WHERE c.chunk_id IN ({placeholders})
-            """,
-            chunk_ids,
-        ).fetchall()
+        with self._lock:
+            rows = self.conn.execute(
+                f"""
+                SELECT c.chunk_id, c.doc_id, c.text, c.section_path,
+                       c.page_start, c.page_end,
+                       d.title, d.doc_type, d.status, d.doc_no, d.issuer,
+                       d.effective_date, d.version, d.source_url, d.page_count
+                FROM chunks c
+                JOIN documents d ON d.doc_id = c.doc_id
+                WHERE c.chunk_id IN ({placeholders})
+                """,
+                chunk_ids,
+            ).fetchall()
         by_id = {
             row["chunk_id"]: Chunk(
                 chunk_id=row["chunk_id"],
@@ -167,34 +173,42 @@ class ChunkStore:
         return [by_id[chunk_id] for chunk_id in chunk_ids if chunk_id in by_id]
 
     def get_chunks_by_doc(self, doc_id: str) -> list[Chunk]:
-        rows = self.conn.execute(
-            "SELECT chunk_id FROM chunks WHERE doc_id = ? ORDER BY rowid", (doc_id,)
-        ).fetchall()
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT chunk_id FROM chunks WHERE doc_id = ? ORDER BY rowid",
+                (doc_id,),
+            ).fetchall()
         return self.get_chunks([row["chunk_id"] for row in rows])
 
     def list_documents(self, status: str | None = None) -> list[DocumentMeta]:
-        if status is None:
-            rows = self.conn.execute("SELECT * FROM documents ORDER BY doc_id").fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT * FROM documents WHERE status = ? ORDER BY doc_id", (status,)
-            ).fetchall()
+        with self._lock:
+            if status is None:
+                rows = self.conn.execute(
+                    "SELECT * FROM documents ORDER BY doc_id"
+                ).fetchall()
+            else:
+                rows = self.conn.execute(
+                    "SELECT * FROM documents WHERE status = ? ORDER BY doc_id",
+                    (status,),
+                ).fetchall()
         return [_row_to_meta(row) for row in rows]
 
     def find_versions(self, doc_no: str) -> list[DocumentMeta]:
-        rows = self.conn.execute(
-            """
-            SELECT doc_id FROM versions
-            WHERE doc_no = ?
-            ORDER BY effective_date IS NULL, effective_date
-            """,
-            (doc_no,),
-        ).fetchall()
+        with self._lock:
+            rows = self.conn.execute(
+                """
+                SELECT doc_id FROM versions
+                WHERE doc_no = ?
+                ORDER BY effective_date IS NULL, effective_date
+                """,
+                (doc_no,),
+            ).fetchall()
         docs = [self.get_document(row["doc_id"]) for row in rows]
         return [doc for doc in docs if doc is not None]
 
     def close(self) -> None:
-        self.conn.close()
+        with self._lock:
+            self.conn.close()
 
 
 def load_chunks_jsonl(path: Path) -> list[Chunk]:
