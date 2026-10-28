@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pymupdf as fitz
 
-from parking_kb.ingest.parse.tables import table_to_markdown
+from parking_kb.ingest.parse.tables import table_rows, table_to_markdown
 from parking_kb.types import Block, ParsedDoc
 
 
@@ -25,23 +25,6 @@ def _body_size(spans: list[tuple[dict, str]]) -> float:
         return 0.0
     weighted.sort()
     return weighted[len(weighted) // 2]
-
-
-def _drop_degenerate_columns(rows: list[list], cells: list) -> list[list]:
-    """Drop empty columns narrower than a few points (double-drawn cell borders)."""
-    if not rows or not cells:
-        return rows
-    drop = set()
-    for i, cell in enumerate(cells):
-        if cell is None:
-            continue
-        narrow = (cell[2] - cell[0]) < 3
-        empty = all(i >= len(row) or not str(row[i] or "").strip() for row in rows)
-        if narrow and empty:
-            drop.add(i)
-    if not drop:
-        return rows
-    return [[value for i, value in enumerate(row) if i not in drop] for row in rows]
 
 
 def _overlaps_table(rect: fitz.Rect, tables: list[fitz.Rect]) -> bool:
@@ -74,9 +57,7 @@ def _page_blocks(page, page_no: int) -> list[tuple[float, Block]]:
 
     items: list[tuple[float, Block]] = []
     for table in tables:
-        rows = table.extract()
-        cells = table.rows[0].cells if table.rows else []
-        markdown = table_to_markdown(_drop_degenerate_columns(rows, cells))
+        markdown = table_to_markdown(table_rows(page, table))
         if markdown:
             items.append((table.bbox[1], Block(kind="table", text=markdown, page=page_no)))
 
