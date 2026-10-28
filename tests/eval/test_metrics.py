@@ -5,6 +5,7 @@ from parking_kb.eval.metrics import (
     bootstrap_ci,
     citation_precision,
     citation_recall,
+    claim_precision,
     mrr_at_k,
     ndcg_at_k,
     recall_at_k,
@@ -38,6 +39,12 @@ def test_citation_precision_and_recall():
     assert citation_recall(["c1", "c2"], {"c1", "c3"}) == 0.5
     assert citation_precision([], {"c1"}) == 0.0
     assert citation_recall(["c1"], set()) == 0.0
+
+
+def test_claim_precision_counts_each_citation_judgement():
+    assert claim_precision([True, False]) == 0.5
+    assert claim_precision([True, True, True]) == 1.0
+    assert claim_precision([]) is None
 
 
 def test_abstention_accuracy():

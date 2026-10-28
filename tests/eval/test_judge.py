@@ -71,3 +71,34 @@ def test_verdicts_roundtrip(tmp_path):
     path = tmp_path / "verdicts.jsonl"
     save_verdicts(verdicts, path)
     assert load_verdicts(path) == verdicts
+
+
+def test_judge_parses_per_citation_checks_and_derives_precision():
+    llm = FakeLLM(
+        '{"correct":"correct","faithful":true,"citations":['
+        '{"n":1,"precise":true,"reason":"直接支持"},'
+        '{"n":2,"precise":false,"reason":"只讲了相邻规定"}],'
+        '"reason":"x"}'
+    )
+    v = LLMJudge(llm).judge(question(), answer("x[1][2]"), [chunk("c1"), chunk("c2")])
+    assert [(c.n, c.precise) for c in v.citation_checks] == [(1, True), (2, False)]
+    assert v.citation_precise is False
+
+
+def test_judge_without_checks_falls_back_to_answer_level_flag():
+    llm = FakeLLM(
+        '{"correct":"correct","faithful":true,"citation_precise":true,"reason":"x"}'
+    )
+    v = LLMJudge(llm).judge(question(), answer("x"), [chunk("c1")])
+    assert v.citation_checks == ()
+    assert v.citation_precise is True
+
+
+def test_judge_ignores_malformed_citation_entries():
+    llm = FakeLLM(
+        '{"correct":"correct","faithful":true,'
+        '"citations":[{"n":"1","precise":true}, {"precise":true}, {"n":3}],'
+        '"reason":"x"}'
+    )
+    v = LLMJudge(llm).judge(question(), answer("x[3]"), [chunk("c1")])
+    assert v.citation_checks == ()

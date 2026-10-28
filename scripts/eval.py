@@ -10,7 +10,12 @@ from parking_kb.eval.report import (
     render_eval_report,
     write_judge_verdicts,
 )
-from parking_kb.eval.run import CONFIGS, aggregate_by_config, run_eval
+from parking_kb.eval.run import (
+    CONFIGS,
+    aggregate_by_config,
+    rejudge_records,
+    run_eval,
+)
 from parking_kb.generate.client import CachedProvider, OpenAICompatibleProvider
 from parking_kb.generate.schema import AnswerGenerator
 from parking_kb.index.dense import COLLECTION, BgeM3Embedder, DenseIndex
@@ -27,6 +32,19 @@ def parse_configs(value: str) -> list[str]:
     if unknown:
         raise argparse.ArgumentTypeError(f"unknown configs: {unknown}")
     return names
+
+
+def build_judge(settings) -> LLMJudge:
+    return LLMJudge(
+        CachedProvider(
+            OpenAICompatibleProvider(
+                base_url=settings.siliconflow_base_url,
+                api_key=settings.siliconflow_api_key,
+                model=settings.judge_model,
+            ),
+            settings.data_dir / "judge_cache",
+        )
+    )
 
 
 def load_documents(path: Path) -> list[DocumentMeta]:
@@ -66,6 +84,11 @@ def main() -> None:
         action="store_true",
         help="rebuild the report from saved verdicts, offline and without API keys",
     )
+    parser.add_argument(
+        "--rejudge",
+        action="store_true",
+        help="re-run only the judge on saved verdicts (no retrieval, no generation)",
+    )
     args = parser.parse_args()
 
     if args.report_only:
@@ -85,6 +108,27 @@ def main() -> None:
     if not settings.siliconflow_api_key:
         raise SystemExit("SILICONFLOW_API_KEY is required for the LLM judge")
     device = args.device or settings.device
+
+    if args.rejudge:
+        records = load_judge_verdicts(args.verdicts)
+        if not records:
+            raise SystemExit(f"no saved records at {args.verdicts}")
+        chunks = load_chunks_jsonl(args.chunks)
+        questions = {q.qid: q for q in load_eval_set(args.questions)}
+        updated = rejudge_records(
+            records,
+            questions,
+            {chunk.chunk_id: chunk for chunk in chunks},
+            build_judge(settings),
+        )
+        write_judge_verdicts(updated, args.verdicts)
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(
+            render_eval_report(aggregate_by_config(updated), updated),
+            encoding="utf-8",
+        )
+        print(f"rejudged {len(updated)} records; wrote {args.verdicts} and {args.out}")
+        return
 
     chunks = load_chunks_jsonl(args.chunks)
     store = ChunkStore(args.db)
@@ -112,16 +156,7 @@ def main() -> None:
             settings.data_dir / "llm_cache",
         )
     )
-    judge = LLMJudge(
-        CachedProvider(
-            OpenAICompatibleProvider(
-                base_url=settings.siliconflow_base_url,
-                api_key=settings.siliconflow_api_key,
-                model=settings.judge_model,
-            ),
-            settings.data_dir / "judge_cache",
-        )
-    )
+    judge = build_judge(settings)
     retriever = HybridRetriever(dense, sparse, store, embedder, reranker)
     questions = load_eval_set(args.questions)
 

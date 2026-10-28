@@ -10,6 +10,7 @@ from parking_kb.eval.metrics import (
     bootstrap_ci,
     citation_precision,
     citation_recall,
+    claim_precision,
     mrr_at_k,
     ndcg_at_k,
     recall_at_k,
@@ -17,7 +18,7 @@ from parking_kb.eval.metrics import (
 from parking_kb.eval.schema import EvalQuestion
 from parking_kb.generate.schema import AnswerGenerator
 from parking_kb.retrieve.hybrid import RetrievalConfig
-from parking_kb.types import AnswerResult, Chunk
+from parking_kb.types import AnswerResult, Chunk, Citation
 
 CONFIGS: dict[str, RetrievalConfig] = {
     "dense_only": RetrievalConfig(
@@ -37,7 +38,7 @@ RETRIEVAL_METRICS = (
     "mrr@10",
     "ndcg@5",
 )
-CITATION_METRICS = ("citation_precision", "citation_recall")
+CITATION_METRICS = ("citation_precision", "citation_recall", "claim_precision")
 METRIC_KEYS = RETRIEVAL_METRICS + CITATION_METRICS + (
     "answer_correct_rate",
     "answer_partial_rate",
@@ -69,6 +70,74 @@ def _classify_error(
     return None
 
 
+def _verdict_fields(verdict: Verdict) -> dict:
+    return {
+        "verdict": asdict(verdict),
+        "answer_correct_rate": 1.0 if verdict.correct == "correct" else 0.0,
+        "answer_partial_rate": 1.0 if verdict.correct == "partial" else 0.0,
+        "faithful_rate": 1.0 if verdict.faithful else 0.0,
+        "citation_precise_rate": 1.0 if verdict.citation_precise else 0.0,
+        "claim_precision": claim_precision(
+            [check.precise for check in verdict.citation_checks]
+        ),
+    }
+
+
+def rebuild_answer(
+    record: dict, chunks_by_id: dict[str, Chunk]
+) -> tuple[AnswerResult, list[Chunk]]:
+    """Rebuild the judge inputs from a saved record, without re-running retrieval.
+
+    Citation numbers are the chunk's 1-based position in ``ranked_ids`` — the
+    same numbering the generator saw when it wrote the answer.
+    """
+    ranked_ids = record["ranked_ids"]
+    position = {
+        chunk_id: index for index, chunk_id in enumerate(ranked_ids, start=1)
+    }
+    contexts = [chunks_by_id[chunk_id] for chunk_id in ranked_ids]
+    citations = []
+    for chunk_id in record["citation_ids"]:
+        chunk = chunks_by_id[chunk_id]
+        citations.append(
+            Citation(
+                n=position[chunk_id],
+                chunk_id=chunk_id,
+                doc_id=chunk.doc_id,
+                title=chunk.meta.title,
+                effective_date=chunk.meta.effective_date,
+                section_path=chunk.section_path,
+                page_start=chunk.page_start,
+            )
+        )
+    answer = AnswerResult(
+        answer=record["answer"],
+        citations=citations,
+        abstained=record["abstained"],
+    )
+    return answer, contexts
+
+
+def rejudge_records(
+    records: list[dict],
+    questions_by_id: dict[str, EvalQuestion],
+    chunks_by_id: dict[str, Chunk],
+    judge: Judge,
+) -> list[dict]:
+    """Re-run only the judge on saved records; retrieval metrics are kept as-is."""
+    updated = []
+    for record in records:
+        question = questions_by_id[record["qid"]]
+        answer, contexts = rebuild_answer(record, chunks_by_id)
+        verdict = judge.judge(question, answer, contexts)
+        result = {**record, **_verdict_fields(verdict)}
+        result["error_type"] = _classify_error(
+            question, record["gold_ids"], record["ranked_ids"], answer, verdict
+        )
+        updated.append(result)
+    return updated
+
+
 def _values(results: list[dict], key: str) -> list[float]:
     values: list[float] = []
     for result in results:
@@ -85,7 +154,7 @@ def _flat_metrics(results: list[dict]) -> dict:
     flat: dict = {"count": len(results)}
     for key in METRIC_KEYS:
         values = _values(results, key)
-        flat[key] = mean(values) if values else 0.0
+        flat[key] = mean(values) if values else None
     flat["error_types"] = dict(
         Counter(
             result["error_type"]
@@ -189,7 +258,7 @@ def run_eval(
             "answer": answer.answer,
             "abstained": answer.abstained,
             "citation_ids": predicted_citations,
-            "verdict": asdict(verdict),
+            **_verdict_fields(verdict),
             "recall@1": recall_at_k(ranked_ids, gold_set, 1),
             "recall@5": recall_at_k(ranked_ids, gold_set, 5),
             "recall@10": recall_at_k(ranked_ids, gold_set, 10),
@@ -199,10 +268,6 @@ def run_eval(
                 predicted_citations, gold_set
             ),
             "citation_recall": citation_recall(predicted_citations, gold_set),
-            "answer_correct_rate": 1.0 if verdict.correct == "correct" else 0.0,
-            "answer_partial_rate": 1.0 if verdict.correct == "partial" else 0.0,
-            "faithful_rate": 1.0 if verdict.faithful else 0.0,
-            "citation_precise_rate": 1.0 if verdict.citation_precise else 0.0,
             "abstention_accuracy": (
                 1.0 if answer.abstained == expected_abstain else 0.0
             ),

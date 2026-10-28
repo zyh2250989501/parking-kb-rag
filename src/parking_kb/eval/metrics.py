@@ -43,6 +43,13 @@ def citation_recall(predicted: list[str], gold: set[str]) -> float:
     return len(set(predicted) & gold) / len(gold)
 
 
+def claim_precision(precise_flags: list[bool]) -> float | None:
+    """逐条引用的精确率；没有判定结果为 None，避免把「没测」记成 0。"""
+    if not precise_flags:
+        return None
+    return sum(1 for flag in precise_flags if flag) / len(precise_flags)
+
+
 def abstention_accuracy(predicted: list[bool], gold: list[bool]) -> float:
     if not gold:
         return 0.0

@@ -1,10 +1,16 @@
-from parking_kb.eval.judge import Verdict
+from parking_kb.eval.judge import CitationCheck, Verdict
 from parking_kb.eval.report import (
     load_judge_verdicts,
     render_eval_report,
     write_judge_verdicts,
 )
-from parking_kb.eval.run import CONFIGS, aggregate, aggregate_by_config, run_eval
+from parking_kb.eval.run import (
+    CONFIGS,
+    aggregate,
+    aggregate_by_config,
+    rejudge_records,
+    run_eval,
+)
 from parking_kb.eval.schema import EvalQuestion, GoldSpan
 from parking_kb.types import AnswerResult, Candidate, Citation
 from tests.factories import chunk
@@ -31,8 +37,11 @@ class FakeGenerator:
 class FakeJudge:
     def __init__(self, verdict):
         self.verdict = verdict
+        self.payloads = []
 
     def judge(self, question, answer, contexts):
+        self.payloads.append({"question": question, "answer": answer,
+                              "contexts": contexts})
         return self.verdict
 
 
@@ -84,6 +93,59 @@ def gold_chunk():
     return chunk("c1", "d1", "按小时收费。")
 
 
+def test_run_eval_records_claim_precision_from_checks():
+    verdict = Verdict(
+        "correct", True, False, "ok",
+        citation_checks=(CitationCheck(1, True, "直接支持"),),
+    )
+    result = run_eval(
+        [question()],
+        "dense_only",
+        fake_retriever(),
+        fake_generator(),
+        FakeJudge(verdict),
+        [gold_chunk()],
+    )
+    assert result["results"][0]["claim_precision"] == 1.0
+    assert result["claim_precision"] == 1.0
+
+
+def test_rejudge_rebuilds_answer_numbering_from_ranked_ids():
+    record = {
+        "qid": "q1",
+        "question": "怎么收费",
+        "question_type": "fact",
+        "verified": True,
+        "gold_ids": ["c1"],
+        "ranked_ids": ["c0", "c1"],
+        "answer": "按小时收费[2]",
+        "abstained": False,
+        "citation_ids": ["c1"],
+        "verdict": {"correct": "correct", "faithful": True,
+                    "citation_precise": True, "reason": "ok"},
+        "citation_precision": 1.0,
+        "citation_recall": 1.0,
+        "claim_precision": None,
+        "answer_correct_rate": 1.0,
+        "answer_partial_rate": 0.0,
+        "faithful_rate": 1.0,
+        "citation_precise_rate": 1.0,
+        "error_type": None,
+    }
+    judge = FakeJudge(
+        Verdict("correct", True, True, "ok",
+                citation_checks=(CitationCheck(2, False, "只是相邻条款"),))
+    )
+    out = rejudge_records([record], {"q1": question()},
+                          {"c0": chunk("c0"), "c1": gold_chunk()}, judge)
+    rebuilt = judge.payloads[0]
+    assert [c.n for c in rebuilt["answer"].citations] == [2]
+    assert [c.chunk_id for c in rebuilt["contexts"]] == ["c0", "c1"]
+    assert out[0]["claim_precision"] == 0.0
+    assert out[0]["citation_precision"] == 1.0  # 原有 strict 指标保留
+    assert out[0]["verdict"]["citation_checks"][0]["precise"] is False
+
+
 def test_run_eval_produces_metrics_and_failures():
     result = run_eval(
         [question()],
@@ -129,7 +191,8 @@ def test_unanswerable_question_contributes_to_abstention_only():
         [gold_chunk()],
     )
     assert result["abstention_accuracy"] == 1.0
-    assert result["recall@5"] == 0.0
+    # 没有 gold 的题型不进检索均值；没测出来记 None，不记 0
+    assert result["recall@5"] is None
     assert result["error_types"] == {}
 
 
@@ -191,6 +254,14 @@ def test_report_contains_ablation_table():
         {"dense_only": {"recall@5": 0.5}, "full": {"recall@5": 0.9}}, []
     )
     assert "dense_only" in text and "full" in text and "Recall@5" in text
+
+
+def test_report_shows_strict_and_claim_precision_side_by_side():
+    text = render_eval_report(
+        {"full": {"citation_precision": 0.521, "claim_precision": 0.9}}, []
+    )
+    assert "引用精确率(strict)" in text and "引用精确率(claim)" in text
+    assert "0.521" in text and "0.900" in text
 
 
 def test_report_renders_ci_and_failures():
