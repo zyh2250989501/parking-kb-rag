@@ -5,6 +5,7 @@ from pathlib import Path
 import jieba
 from rank_bm25 import BM25Okapi
 
+from parking_kb.index.search_text import index_text
 from parking_kb.types import Chunk
 
 _USERDICT = Path(__file__).resolve().parents[3] / "corpus" / "jieba_userdict.txt"
@@ -73,7 +74,7 @@ class SparseIndex:
     def build(cls, chunks: list[Chunk]) -> "SparseIndex":
         return cls(
             chunk_ids=[chunk.chunk_id for chunk in chunks],
-            tokenized=[tokenize_zh(chunk.text) for chunk in chunks],
+            tokenized=[tokenize_zh(index_text(chunk)) for chunk in chunks],
         )
 
     def search(self, query: str, top_k: int = 20) -> list[tuple[str, float]]:

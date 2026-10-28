@@ -66,6 +66,9 @@ class Chunk:
     page_start: int | None
     page_end: int | None
     meta: DocumentMeta
+    # 建索引专用文本（英文文档的中文检索描述），空串表示直接用 text。
+    # 生成与引用展示始终用 text，保证用户读到的是原文。
+    search_text: str = ""
 
 
 @dataclass

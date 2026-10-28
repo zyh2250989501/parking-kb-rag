@@ -227,6 +227,7 @@ def load_chunks_jsonl(path: Path) -> list[Chunk]:
                     page_start=record["page_start"],
                     page_end=record["page_end"],
                     meta=DocumentMeta(**record["meta"]),
+                    search_text=record.get("search_text", ""),
                 )
             )
     return chunks

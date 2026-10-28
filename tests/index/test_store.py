@@ -71,3 +71,20 @@ def test_load_chunks_jsonl_roundtrip(tmp_path):
     assert loaded[0].chunk_id == "c1"
     assert loaded[0].meta.doc_id == "d1"
     assert loaded[0].meta.status == "现行"
+
+
+def test_load_chunks_jsonl_reads_search_text(tmp_path):
+    record = asdict(
+        chunk("c1", "d1", "You can add owner.", search_text="用户管理 添加账号")
+    )
+    path = tmp_path / "chunks.jsonl"
+    path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    assert load_chunks_jsonl(path)[0].search_text == "用户管理 添加账号"
+
+
+def test_load_chunks_jsonl_defaults_search_text_for_old_records(tmp_path):
+    record = asdict(chunk("c1", "d1", "收费按小时计"))
+    record.pop("search_text")
+    path = tmp_path / "chunks.jsonl"
+    path.write_text(json.dumps(record, ensure_ascii=False) + "\n", encoding="utf-8")
+    assert load_chunks_jsonl(path)[0].search_text == ""

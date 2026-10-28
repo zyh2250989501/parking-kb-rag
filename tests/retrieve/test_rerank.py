@@ -17,6 +17,21 @@ def test_rerank_empty_input():
     assert rerank([], "q", FakeReranker(), top_k=8) == []
 
 
+def test_rerank_scores_search_text_when_present():
+    """重排要看建索引用的那份文本，否则中文问句比英文原文，跨语言差距原地保留。"""
+
+    class ChineseAwareReranker:
+        def score(self, query, texts):
+            return [10.0 if "用户管理" in text else 0.0 for text in texts]
+
+    cands = [
+        cand("c1", text="停车卡管理"),
+        cand("c2", text="You can add vehicle owner.", search_text="用户管理 添加账号"),
+    ]
+    got = rerank(cands, "用户管理", ChineseAwareReranker(), top_k=1)
+    assert [c.chunk.chunk_id for c in got] == ["c2"]
+
+
 def test_rerank_writes_model_scores_onto_candidates():
     got = rerank(
         [cand("c1", text="设备维护", score=99.0), cand("c2", text="停车收费标准")],

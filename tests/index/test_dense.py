@@ -30,6 +30,18 @@ def test_dense_index_roundtrip(tmp_path):
     idx2.close()
 
 
+def test_dense_build_embeds_search_text_when_present(tmp_path):
+    """英文原文配了中文检索描述时，向量应按中文描述建，否则中文查询打不中。"""
+    idx = DenseIndex(tmp_path / "q")
+    idx.build(
+        [chunk("c1", "d1", "You can add vehicle owner.", search_text="月租")],
+        KeywordEmbedder(),
+    )
+    hits = idx.search("月租", KeywordEmbedder(), top_k=1)
+    assert hits[0][0] == "c1"
+    idx.close()
+
+
 def test_dense_search_is_ranked_by_similarity(tmp_path):
     idx = DenseIndex(tmp_path / "q")
     idx.build(

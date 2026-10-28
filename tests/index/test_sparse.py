@@ -13,6 +13,23 @@ def test_bm25_ranks_relevant_chunk_first():
     assert hits[0][0] == "c1"
 
 
+def test_bm25_indexes_search_text_when_present():
+    """英文正文靠中文检索描述才能被中文词打中——sparse 也一样。"""
+    idx = SparseIndex.build(
+        [
+            chunk(
+                "c1",
+                "d1",
+                "You can add vehicle owner.",
+                search_text="用户管理 添加操作员账号",
+            ),
+            chunk("c2", "d2", "停车收费按车型和停放时长计算"),
+        ]
+    )
+    hits = idx.search("操作员账号", top_k=2)
+    assert hits[0][0] == "c1"
+
+
 def test_sparse_index_persistence(tmp_path):
     idx = SparseIndex.build([chunk("c1", "d1", "月租车办理流程")])
     idx.save(tmp_path / "bm25.pkl")

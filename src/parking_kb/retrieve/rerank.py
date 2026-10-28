@@ -1,5 +1,6 @@
 from typing import Protocol
 
+from parking_kb.index.search_text import index_text
 from parking_kb.types import Candidate
 
 
@@ -35,7 +36,10 @@ def rerank(
 ) -> list[Candidate]:
     if not candidates:
         return []
-    scores = reranker.score(query, [candidate.chunk.text for candidate in candidates])
+    # 与检索用同一份文本：英文段落只有带上中文检索描述，才能和中文问句公平比较。
+    scores = reranker.score(
+        query, [index_text(candidate.chunk) for candidate in candidates]
+    )
     for candidate, score in zip(candidates, scores):
         candidate.score = float(score)
     ranked = sorted(candidates, key=lambda candidate: candidate.score, reverse=True)

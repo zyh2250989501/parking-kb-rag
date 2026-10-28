@@ -4,6 +4,7 @@ from typing import Protocol
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
+from parking_kb.index.search_text import index_text
 from parking_kb.types import Chunk
 
 COLLECTION = "chunks"
@@ -39,7 +40,7 @@ class DenseIndex:
         self.client = QdrantClient(path=str(path))
 
     def build(self, chunks: list[Chunk], embedder: Embedder) -> None:
-        vectors = embedder.encode([chunk.text for chunk in chunks])
+        vectors = embedder.encode([index_text(chunk) for chunk in chunks])
         if self.client.collection_exists(COLLECTION):
             self.client.delete_collection(COLLECTION)
         self.client.create_collection(
