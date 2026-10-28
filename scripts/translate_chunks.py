@@ -6,16 +6,22 @@ from pathlib import Path
 
 from parking_kb.config import load_settings
 from parking_kb.generate.client import CachedProvider, OpenAICompatibleProvider
-from parking_kb.index.describe import build_messages, chunks_to_describe, clean_description
+from parking_kb.index.describe import (
+    build_messages,
+    chunks_to_describe,
+    clean_description,
+    description_is_current,
+    text_fingerprint,
+)
 from parking_kb.index.store import load_chunks_jsonl
 
 
-def load_descriptions(path: Path) -> dict[str, str]:
+def load_descriptions(path: Path) -> dict[str, dict]:
     if not path.exists():
         return {}
     with path.open(encoding="utf-8") as handle:
         return {
-            record["chunk_id"]: record["search_text"]
+            record["chunk_id"]: record
             for record in (json.loads(line) for line in handle if line.strip())
         }
 
@@ -40,8 +46,9 @@ def main() -> None:
     chunks = load_chunks_jsonl(args.chunks)
     descriptions = load_descriptions(args.descriptions)
     for chunk in chunks:
-        if chunk.chunk_id in descriptions:
-            chunk.search_text = descriptions[chunk.chunk_id]
+        record = descriptions.get(chunk.chunk_id, {})
+        if description_is_current(chunk, record):
+            chunk.search_text = record["search_text"]
 
     pending = chunks_to_describe(chunks)
     if args.limit:
@@ -77,16 +84,15 @@ def main() -> None:
                         time.sleep(2 * (attempt + 1))
             if not description:
                 continue
-            handle.write(
-                json.dumps(
-                    {"chunk_id": chunk.chunk_id, "search_text": description},
-                    ensure_ascii=False,
-                )
-                + "\n"
-            )
+            record = {
+                "chunk_id": chunk.chunk_id,
+                "search_text": description,
+                "text_sha": text_fingerprint(chunk.text),
+            }
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
             handle.flush()
             chunk.search_text = description
-            descriptions[chunk.chunk_id] = description
+            descriptions[chunk.chunk_id] = record
             written += 1
             if index % 20 == 0 or index == len(pending):
                 print(f"  [{index}/{len(pending)}] 已写 {written}", flush=True)
@@ -94,6 +100,23 @@ def main() -> None:
     with args.chunks.open("w", encoding="utf-8") as handle:
         for chunk in chunks:
             handle.write(json.dumps(asdict(chunk), ensure_ascii=False) + "\n")
+
+    # 每轮只追加，重跑会留下过期记录；最后按当前 chunk 重写一遍，保持一条一份。
+    with args.descriptions.open("w", encoding="utf-8") as handle:
+        for chunk in chunks:
+            if not chunk.search_text:
+                continue
+            handle.write(
+                json.dumps(
+                    {
+                        "chunk_id": chunk.chunk_id,
+                        "search_text": chunk.search_text,
+                        "text_sha": text_fingerprint(chunk.text),
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
     print(f"完成：{written} 条新描述，已写回 {args.chunks}", flush=True)
     print("下一步：重建索引（serve.py --rebuild-index 或 scripts/ingest 后重建）", flush=True)
 

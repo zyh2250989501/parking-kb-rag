@@ -5,6 +5,8 @@
 只用于建索引（`Chunk.search_text`），生成与引用展示仍用原文。
 """
 
+import hashlib
+
 from parking_kb.index.search_text import needs_translation
 from parking_kb.types import Chunk
 
@@ -35,6 +37,18 @@ def build_messages(chunk: Chunk) -> list[dict[str, str]]:
 def clean_description(raw: str) -> str:
     text = " ".join(raw.split()).strip().strip('"').strip("“”").strip()
     return text[:MAX_DESCRIPTION_CHARS]
+
+
+def text_fingerprint(text: str) -> str:
+    """描述是按文本内容生成的；chunk_id 只保证位置，重新入库后同位置的文本会变。"""
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def description_is_current(chunk: Chunk, record: dict) -> bool:
+    """sidecar 里这条描述是否还对得上当前文本。没有指纹的旧记录一律按过期处理。"""
+    return bool(record.get("search_text")) and record.get("text_sha") == text_fingerprint(
+        chunk.text
+    )
 
 
 def chunks_to_describe(chunks: list[Chunk]) -> list[Chunk]:
