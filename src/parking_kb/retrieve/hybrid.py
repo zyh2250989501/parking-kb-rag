@@ -4,6 +4,7 @@ from parking_kb.index.dense import DenseIndex, Embedder
 from parking_kb.index.sparse import SparseIndex
 from parking_kb.index.store import ChunkStore
 from parking_kb.retrieve.filters import apply_status_filter
+from parking_kb.retrieve.query import strip_document_prefix
 from parking_kb.retrieve.rerank import Reranker, rerank
 from parking_kb.types import Candidate
 
@@ -19,6 +20,7 @@ class RetrievalConfig:
     use_sparse: bool = True
     use_rerank: bool = True
     use_status_filter: bool = True
+    use_query_rewrite: bool = True
 
 
 def rrf_fuse(rankings: list[list[str]], k: int = 60) -> list[tuple[str, float]]:
@@ -43,17 +45,29 @@ class HybridRetriever:
         self.store = store
         self.embedder = embedder
         self.reranker = reranker
+        self._titles: list[str] | None = None
+
+    def _document_titles(self) -> list[str]:
+        if self._titles is None:
+            self._titles = [doc.title for doc in self.store.list_documents()]
+        return self._titles
 
     def retrieve(
         self, query: str, config: RetrievalConfig = RetrievalConfig()
     ) -> list[Candidate]:
+        # 检索查询去掉开头的文档限定语；状态过滤仍看原话（标题里的年份是版本线索）。
+        search_query = (
+            strip_document_prefix(query, self._document_titles())
+            if config.use_query_rewrite
+            else query
+        )
         dense_hits = (
-            self.dense.search(query, self.embedder, config.dense_top_k)
+            self.dense.search(search_query, self.embedder, config.dense_top_k)
             if config.use_dense
             else []
         )
         sparse_hits = (
-            self.sparse.search(query, config.sparse_top_k)
+            self.sparse.search(search_query, config.sparse_top_k)
             if config.use_sparse
             else []
         )
@@ -90,5 +104,7 @@ class HybridRetriever:
             candidates = apply_status_filter(candidates, query, self.store)
 
         if config.use_rerank and self.reranker is not None:
-            return rerank(candidates, query, self.reranker, config.rerank_top_k)
+            return rerank(
+                candidates, search_query, self.reranker, config.rerank_top_k
+            )
         return candidates[: config.rerank_top_k]

@@ -31,7 +31,11 @@ class FakeEmbedder:
 
 
 class FakeReranker:
+    def __init__(self):
+        self.queries = []
+
     def score(self, query, texts):
+        self.queries.append(query)
         return [10.0 if "收费标准" in text else 0.0 for text in texts]
 
 
@@ -138,3 +142,55 @@ def test_status_filter_is_applied_by_default():
 def test_empty_hits_return_no_candidates():
     retriever = make_retriever(dense_hits=[], sparse_hits=[])
     assert retriever.retrieve("q") == []
+
+
+DAHUA = "大华停车场管理系统用户手册 V2.0.0"
+DAHUA_QUERY = "大华停车场管理系统V2.0.0中，系统要求的处理器型号是什么？"
+DAHUA_ASK = "系统要求的处理器型号是什么？"
+
+
+def dahua_retriever(reranker=None):
+    chunks = [
+        chunk("c1", "d1", "处理器 Core i3-4160", meta=meta(doc_id="d1", title=DAHUA))
+    ]
+    return make_retriever(
+        dense_hits=[("c1", 0.9)],
+        sparse_hits=[("c1", 0.5)],
+        chunks=chunks,
+        reranker=reranker,
+    )
+
+
+def test_document_prefix_is_dropped_from_the_retrieval_query():
+    retriever = dahua_retriever(FakeReranker())
+    retriever.retrieve(DAHUA_QUERY, RetrievalConfig(use_status_filter=False))
+    assert retriever.dense.queries == [DAHUA_ASK]
+    assert retriever.sparse.queries == [DAHUA_ASK]
+    assert retriever.reranker.queries == [DAHUA_ASK]
+
+
+def test_query_rewrite_can_be_disabled():
+    retriever = dahua_retriever()
+    retriever.retrieve(
+        DAHUA_QUERY,
+        RetrievalConfig(
+            use_rerank=False, use_status_filter=False, use_query_rewrite=False
+        ),
+    )
+    assert retriever.dense.queries == [DAHUA_QUERY]
+
+
+def test_status_filter_sees_the_original_query():
+    """标题里的年份是版本线索，剥掉的只是检索查询，过滤要按用户原话判。"""
+    chunks = [
+        chunk("c1", "d1", "收费", meta=meta(doc_id="d1", status="现行")),
+        chunk("c2", "d2", "收费", meta=meta(doc_id="d2", status="失效")),
+    ]
+    retriever = make_retriever(
+        dense_hits=[("c1", 0.9), ("c2", 0.8)], sparse_hits=[], chunks=chunks
+    )
+    got = retriever.retrieve(
+        "湖南省机动车停放服务收费管理办法2025年版中，收费标准是什么？",
+        RetrievalConfig(use_rerank=False),
+    )
+    assert [candidate.chunk.chunk_id for candidate in got] == ["c1", "c2"]
