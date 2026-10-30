@@ -16,7 +16,11 @@ from parking_kb.eval.run import (
     rejudge_records,
     run_eval,
 )
-from parking_kb.generate.client import CachedProvider, OpenAICompatibleProvider
+from parking_kb.generate.client import (
+    CachedProvider,
+    OpenAICompatibleProvider,
+    RetryingProvider,
+)
 from parking_kb.generate.schema import AnswerGenerator
 from parking_kb.index.dense import COLLECTION, BgeM3Embedder, DenseIndex
 from parking_kb.index.sparse import SparseIndex
@@ -37,10 +41,12 @@ def parse_configs(value: str) -> list[str]:
 def build_judge(settings) -> LLMJudge:
     return LLMJudge(
         CachedProvider(
-            OpenAICompatibleProvider(
-                base_url=settings.siliconflow_base_url,
-                api_key=settings.siliconflow_api_key,
-                model=settings.judge_model,
+            RetryingProvider(
+                OpenAICompatibleProvider(
+                    base_url=settings.siliconflow_base_url,
+                    api_key=settings.siliconflow_api_key,
+                    model=settings.judge_model,
+                )
             ),
             settings.data_dir / "judge_cache",
         )
@@ -148,10 +154,12 @@ def main() -> None:
     reranker = BgeReranker(settings.reranker_model, device=device)
     generator = AnswerGenerator(
         CachedProvider(
-            OpenAICompatibleProvider(
-                base_url=settings.deepseek_base_url,
-                api_key=settings.deepseek_api_key,
-                model=settings.deepseek_model,
+            RetryingProvider(
+                OpenAICompatibleProvider(
+                    base_url=settings.deepseek_base_url,
+                    api_key=settings.deepseek_api_key,
+                    model=settings.deepseek_model,
+                )
             ),
             settings.data_dir / "llm_cache",
         )
