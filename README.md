@@ -45,6 +45,8 @@ python scripts/eval.py --report-only --verdicts eval/judge_verdicts.jsonl --out 
 
 有 `Makefile` 的机器上等价于 `make ingest` / `make dev` / `make test` / `make eval-report`（Windows 未装 make 时直接用上面的命令）。
 
+`.github/workflows/ci.yml` 在每次 push 到 `main` 与每个 PR 上跑两件事：`pytest`（169 个用例，6 个 slow 用例默认跳过），以及「只用 `eval/judge_verdicts.jsonl` 重建 `reports/eval_report.md` 并逐字节比对」——报告与判定一旦漂移，CI 红。两件事在本机都已实测通过（报告重建结果与入库文件完全一致）。
+
 完整评估（需要 `.env` 中的 DeepSeek / SiliconFlow key，首次会下载 bge-m3 与 bge-reranker）：
 
 ```bash

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # sentence-transformers 会拉 torch。默认 wheel 带 CUDA，ubuntu 上要多装
+      # 两个 G 的 nvidia 依赖；默认测试不加载模型，CPU 版足够。
+      - name: Install CPU PyTorch
+        run: pip install --index-url https://download.pytorch.org/whl/cpu torch
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      # 默认只跑非 slow 用例。slow 用例要真实模型/OCR 引擎，见 pyproject 的 addopts。
+      # HF_HUB_OFFLINE 让任何意外的模型下载直接失败，而不是在 CI 里挂着重试。
+      - name: Tests
+        run: python -m pytest -q
+        env:
+          HF_HUB_OFFLINE: "1"
+
+      # 报告必须能只靠入库的判定结果重建。对不上说明 reports/eval_report.md
+      # 与 eval/judge_verdicts.jsonl 有一条已经漂移，两者之一在说谎。
+      - name: Report reproduces from saved verdicts
+        run: |
+          python scripts/eval.py --report-only \
+            --verdicts eval/judge_verdicts.jsonl \
+            --out "$RUNNER_TEMP/eval_report.md"
+          diff -u reports/eval_report.md "$RUNNER_TEMP/eval_report.md"
