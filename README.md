@@ -1,5 +1,7 @@
 # 智慧停车企业知识库 RAG 问答助手
 
+[![CI](https://github.com/zyh2250989501/parking-kb-rag/actions/workflows/ci.yml/badge.svg)](https://github.com/zyh2250989501/parking-kb-rag/actions/workflows/ci.yml)
+
 面向停车运营企业的知识库问答：把标准、收费办法、设备手册、客服规范混合语料入库，用「稠密 + 稀疏混合检索 → 状态/版本过滤 → 重排 → 带引用生成」回答问题，并用可复现的消融评估说明每一层到底带来了多少收益。
 
 ## 架构
@@ -45,7 +47,7 @@ python scripts/eval.py --report-only --verdicts eval/judge_verdicts.jsonl --out 
 
 有 `Makefile` 的机器上等价于 `make ingest` / `make dev` / `make test` / `make eval-report`（Windows 未装 make 时直接用上面的命令）。
 
-`.github/workflows/ci.yml` 在每次 push 到 `main` 与每个 PR 上跑两件事：`pytest`（169 个用例，6 个 slow 用例默认跳过），以及「只用 `eval/judge_verdicts.jsonl` 重建 `reports/eval_report.md` 并逐字节比对」——报告与判定一旦漂移，CI 红。两件事在本机都已实测通过（报告重建结果与入库文件完全一致）。
+`.github/workflows/ci.yml` 在每次 push 到 `main` 与每个 PR 上跑两件事：`pytest`（169 个用例，6 个 slow 用例默认跳过），以及「只用 `eval/judge_verdicts.jsonl` 重建 `reports/eval_report.md` 并逐字节比对」——报告与判定一旦漂移，CI 红。2026-10-30 首次在 GitHub 上跑通，七个步骤全绿、耗时 81 秒。
 
 完整评估（需要 `.env` 中的 DeepSeek / SiliconFlow key，首次会下载 bge-m3 与 bge-reranker）：
 
