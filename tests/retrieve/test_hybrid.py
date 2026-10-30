@@ -194,3 +194,53 @@ def test_status_filter_sees_the_original_query():
         RetrievalConfig(use_rerank=False),
     )
     assert [candidate.chunk.chunk_id for candidate in got] == ["c1", "c2"]
+
+
+def two_versions():
+    return [
+        chunk(
+            "old",
+            "d1",
+            "停车收费标准",
+            meta=meta(
+                doc_id="d1",
+                doc_no="湘发改价费规〔2020〕1 号",
+                effective_date="2020-01-01",
+                title="湖南省机动车停放服务收费管理办法（2020）",
+            ),
+        ),
+        chunk(
+            "new",
+            "d2",
+            "停车收费标准",
+            meta=meta(
+                doc_id="d2",
+                doc_no="湘发改价费规〔2020〕1 号",
+                effective_date="2025-01-01",
+                title="湖南省机动车停放服务收费管理办法（2025）",
+            ),
+        ),
+    ]
+
+
+def version_retriever():
+    return make_retriever(
+        dense_hits=[("old", 0.9), ("new", 0.8)],
+        sparse_hits=[("old", 0.7), ("new", 0.6)],
+        chunks=two_versions(),
+        reranker=FakeReranker(),
+    )
+
+
+def test_older_version_never_reaches_the_reranker():
+    """同文号两版都现行时只留生效日期最新的，且这条过滤要经过重排仍然成立。"""
+    got = version_retriever().retrieve("停车收费怎么算", RetrievalConfig())
+    assert [candidate.chunk.chunk_id for candidate in got] == ["new"]
+
+
+def test_temporal_question_keeps_both_versions():
+    """问句带时间线索时两版都留——用户问的是历史口径。"""
+    got = version_retriever().retrieve(
+        "2020年的收费标准是什么", RetrievalConfig()
+    )
+    assert [candidate.chunk.chunk_id for candidate in got] == ["old", "new"]

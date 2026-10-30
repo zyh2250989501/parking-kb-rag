@@ -13,3 +13,5 @@ corpus/*
 !corpus/metadata_overrides.yaml
 !corpus/jieba_userdict.txt
 reports/*.log
+eval/version_traps/corpus/
+eval/version_traps/data/
