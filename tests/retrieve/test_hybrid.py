@@ -244,3 +244,10 @@ def test_temporal_question_keeps_both_versions():
         "2020年的收费标准是什么", RetrievalConfig()
     )
     assert [candidate.chunk.chunk_id for candidate in got] == ["old", "new"]
+
+
+def test_default_context_window_is_fourteen():
+    """上下文窗口 8→14：50 题评估集在 k=8 就饱和，放宽换不到检索收益，
+    但演示里「5.1.5 照明设施」重排后正好第 14，8 条时看不到任何照明条款。
+    这个数字来自测量（eval/rerank_blend/run.py），不是拍脑袋。"""
+    assert RetrievalConfig().rerank_top_k == 14

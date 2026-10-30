@@ -4,7 +4,7 @@ from parking_kb.generate.client import LLMProvider
 from parking_kb.generate.prompt import build_context, parse_answer_json
 from parking_kb.types import AnswerResult, Candidate
 
-DEFAULT_PROMPT = Path("prompts/answer_v1.md")
+DEFAULT_PROMPT = Path("prompts/answer_v2.md")
 
 
 class AnswerGenerator:

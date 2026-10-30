@@ -14,7 +14,7 @@ class RetrievalConfig:
     dense_top_k: int = 20
     sparse_top_k: int = 20
     fused_top_k: int = 20
-    rerank_top_k: int = 8
+    rerank_top_k: int = 14
     rrf_k: int = 60
     use_dense: bool = True
     use_sparse: bool = True

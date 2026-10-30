@@ -71,3 +71,14 @@ def test_cached_provider_reuses_response(tmp_path):
     assert first == second == "same"
     assert len(inner.calls) == 1
     assert len(list((tmp_path / "cache").glob("*"))) == 1
+
+
+def test_default_prompt_is_v2_with_partial_evidence_rule():
+    """v2 把「有没有可引条款」和「答案完不完整」分开。"""
+    from parking_kb.generate.schema import DEFAULT_PROMPT
+
+    assert DEFAULT_PROMPT.name == "answer_v2.md"
+    text = DEFAULT_PROMPT.read_text(encoding="utf-8")
+    assert "没覆盖问题追加的限定条件" in text
+    # 提示词里不许出现演示题的字样——那是拿单题调参
+    assert "夜间照明" not in text
