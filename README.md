@@ -18,7 +18,7 @@ flowchart LR
   G --> H
   H --> I[状态 / 版本过滤]
   I --> J[bge-reranker 重排]
-  J --> K[DeepSeek 生成<br/>引用 + 拒答]
+  J -- top-14 进上下文 --> K[DeepSeek 生成<br/>引用 + 拒答]
   K --> L[FastAPI + 静态前端]
   J --> M[检索指标<br/>Recall / MRR / nDCG]
   K --> N[LLM Judge<br/>Qwen（异源）]
@@ -47,7 +47,7 @@ python scripts/eval.py --report-only --verdicts eval/judge_verdicts.jsonl --out 
 
 有 `Makefile` 的机器上等价于 `make ingest` / `make dev` / `make test` / `make eval-report`（Windows 未装 make 时直接用上面的命令）。
 
-`.github/workflows/ci.yml` 在每次 push 到 `main` 与每个 PR 上跑两件事：`pytest`（169 个用例，6 个 slow 用例默认跳过），以及「只用 `eval/judge_verdicts.jsonl` 重建 `reports/eval_report.md` 并逐字节比对」——报告与判定一旦漂移，CI 红。2026-10-30 首次在 GitHub 上跑通，七个步骤全绿、耗时 81 秒。
+`.github/workflows/ci.yml` 在每次 push 到 `main` 与每个 PR 上跑两件事：`pytest`（174 个用例，6 个 slow 用例默认跳过），以及「只用 `eval/judge_verdicts.jsonl` 重建 `reports/eval_report.md` 并逐字节比对」——报告与判定一旦漂移，CI 红。2026-10-30 首次在 GitHub 上跑通（七个步骤全绿、81 秒）；2026-10-31 那一轮换了索引与提示词之后仍是全绿，247 秒。
 
 完整评估（需要 `.env` 中的 DeepSeek / SiliconFlow key，首次会下载 bge-m3 与 bge-reranker）：
 
